@@ -5,6 +5,7 @@ int currentState; // what the new state is
 int pastState = HIGH; // what the past state was
 unsigned long previousMillis = 0; // how we tell when we last switched state
 unsigned long shortInterval = 500; // how we differentiate between short + long, in milliseconds so this is .5 seconds
+const unsigned long debounceInterval = 50;  // Ignore rapid changes under 50ms
 bool changedRecently = 1;
 
 void setup() {
@@ -16,25 +17,17 @@ void loop() {
   unsigned long currentMillis = millis();
 
   currentState = digitalRead(MIC_PIN);
+  if (currentState != pastState && (currentMillis - previousMillis > debounceInterval)) {
+    unsigned long timeDifference = currentMillis - previousMillis;
 
-  if (currentState == HIGH && pastState == LOW) {
-    if (currentMillis - previousMillis <= shortInterval) {
+    if (timeDifference <= shortInterval) {
       changedRecently = 1;
-      Serial.println("changed recently");
+      Serial.println("Short change detected");
     } else {
       changedRecently = 0;
-      Serial.println("didn't change recently");
+      Serial.println("Long change detected");
     }
-    previousMillis = currentMillis;
-  }
-  else if (currentState == LOW && pastState == HIGH) {
-    if (currentMillis - previousMillis <= shortInterval) {
-      changedRecently = 1;
-      Serial.println("changed recently");
-    } else {
-      changedRecently = 0;
-      Serial.println("didn't change recently");
-    }
+
     previousMillis = currentMillis;
   }
   pastState = currentState;

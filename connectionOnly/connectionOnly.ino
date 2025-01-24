@@ -31,6 +31,16 @@ void OnDataRecv(const uint8_t * mac, const uint8_t theirData, int len) {
   Serial.println(len);
   incomingData = theirData;
 }
+//
+unsigned long lastSendTime = 0;  // Last time data was sent
+const unsigned long sendInterval = 2000;  // 2 seconds between sends
+
+#define MAX_PACKET_SIZE 250
+uint8_t dataBuffer[MAX_PACKET_SIZE];
+size_t bufferIndex = 0;
+unsigned long lastCollectionTime = 0;
+const unsigned long collectionInterval = 100;  // Collect data every 100ms
+
 
 void setup() {
   Serial.begin(115200);
@@ -59,13 +69,31 @@ void setup() {
 
 
 void loop() {
-  uint8_t myData = 8;
-  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, 8);
-
-  if (result == ESP_OK) {
-    Serial.println("Sent with success");
-  } else {
-    Serial.println("Error sending the data");
+// Collect data at defined intervals
+  if (millis() - lastCollectionTime >= collectionInterval) {
+    if (bufferIndex < MAX_PACKET_SIZE - 1) {
+      dataBuffer[bufferIndex++] = random(0, 255);  // Dummy data for testing
+    } else {
+      esp_err_t result = esp_now_send(broadcastAddress, dataBuffer, bufferIndex);
+      if (result == ESP_OK) {
+        Serial.println("Buffer sent successfully");
+      } else {
+        Serial.println("Error sending buffer");
+      }
+      bufferIndex = 0;  // Reset buffer after sending
+    }
+    lastCollectionTime = millis();
   }
-  delay(2000); // how long we wait between loops, in ms
+
+  // Send collected data every 2 seconds if needed
+  if (millis() - lastSendTime >= sendInterval && bufferIndex > 0) {
+    esp_err_t result = esp_now_send(broadcastAddress, dataBuffer, bufferIndex);
+    if (result == ESP_OK) {
+      Serial.println("Sent with success");
+    } else {
+      Serial.println("Error sending the data");
+    }
+    bufferIndex = 0;  // Reset buffer
+    lastSendTime = millis();
+  }
 }
