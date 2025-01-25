@@ -51,7 +51,7 @@ static void beacon_analysis_task(void *pvParameters) {
                 pkt.hdr.frame_ctrl.subtype == WIFI_MGMT_SUBTYPE_BEACON) {
                 
                 ESP_LOGI(TAG, "Beacon Frame Detected:");
-                ESP_LOGI(TAG, "BSSID: " MACSTR, MAC2STR(pkt.hdr.addr3));
+                ESP_LOGI(TAG, "BSSID: " MAC2STR(pkt.hdr.addr3));
                 ESP_LOGI(TAG, "SSID: %.*s", pkt.beacon.ssid_length, pkt.beacon.ssid);
                 ESP_LOGI(TAG, "Channel: %d", ppkt->rx_ctrl.channel);
                 ESP_LOGI(TAG, "RSSI: %d", ppkt->rx_ctrl.rssi);
@@ -103,8 +103,8 @@ static void evil_twin_task(void *pvParameters) {
 
             ESP_LOGI(TAG, "Suspicious network detected:");
             ESP_LOGI(TAG, "SSID: %s", suspicious.ssid);
-            ESP_LOGI(TAG, "Original BSSID: " MACSTR, MAC2STR(legitimate_networks[i].bssid));
-            ESP_LOGI(TAG, "Suspicious BSSID: " MACSTR, MAC2STR(suspicious.bssid));
+            ESP_LOGI(TAG, "Original BSSID: " MAC2STR(legitimate_networks[i].bssid));
+            ESP_LOGI(TAG, "Suspicious BSSID: " MAC2STR(suspicious.bssid));
             
             vTaskDelay(pdMS_TO_TICKS(3000));
         }
