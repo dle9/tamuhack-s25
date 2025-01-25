@@ -12,4 +12,4 @@ idf_component_register(
         "esp_system"
 )
 
-target_compile_options(${COMPONENT_LIB} PRIVATE "-Wno-error=unused-variable")
+# target_compile_options(${COMPONENT_LIB} PRIVATE "-Wno-error=unused-variable")
