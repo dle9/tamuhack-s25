@@ -2,11 +2,15 @@
 #pragma once
 
 #include "esp_err.h"
-#include "driver/adc.h"
-#include "driver/gpio.h"
-#include "esp_adc_cal.h"
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
+#include "esp_timer.h"
+#include "esp_efuse.h"
+#include "spi_flash_mmap.h"
+#include "hal/temp_sensor_hal.h"
 
-// Types of hardware security challenges
+// Challenge types for different hardware security scenarios
 typedef enum {
     HW_CHALLENGE_TIMING_ATTACK,      // Demonstrate timing-based vulnerabilities
     HW_CHALLENGE_VOLTAGE_GLITCH,     // Show voltage glitching detection
@@ -15,23 +19,8 @@ typedef enum {
     HW_CHALLENGE_SECURE_STORAGE      // Secure storage implementation
 } hardware_challenge_type_t;
 
-// Configuration for hardware challenges
-typedef struct {
-    hardware_challenge_type_t type;
-    uint8_t difficulty;              // 1-5, where 5 is most difficult
-    bool logging_enabled;
-    void (*callback)(void* arg);     // Callback for challenge events
-} hardware_challenge_config_t;
-
-// Initialize hardware security module
+// Function declarations
 esp_err_t hardware_challenges_init(void);
-
-// Start a specific hardware challenge
 esp_err_t start_hardware_challenge(hardware_challenge_type_t type);
-
-// Stop the current challenge
 esp_err_t stop_hardware_challenge(void);
-
-// Get current challenge status
 esp_err_t get_hardware_challenge_status(void* status_buffer, size_t buffer_size);
-
