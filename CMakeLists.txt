@@ -1,8 +1,10 @@
-# Main project CMakeLists.txt
+# Main CMakeLists.txt
 cmake_minimum_required(VERSION 3.16)
 
-# Include the ESP-IDF components
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+# Set Bluetooth configurations before including project.cmake
+set(BLUETOOTH_ENABLED 1)
+set(BT_ENABLED 1)
+set(BLE_ENABLED 1)
 
-# Set your project name
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(esp32_security_trainer)
