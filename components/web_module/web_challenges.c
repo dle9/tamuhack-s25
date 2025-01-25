@@ -190,7 +190,7 @@ esp_err_t start_challenge(uint8_t challenge_id) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    challenges[challenge_id].status.start_time = esp_timer_get_time() / 1000000;
+    challenges[challenge_id].status.start_time = 0; // esp_timer_get_time() / 1000000;
     challenges[challenge_id].status.attempts = 0;
     challenges[challenge_id].status.completed = false;
 
