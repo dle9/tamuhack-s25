@@ -1,4 +1,3 @@
-
 // components/network_module/network_challenges.c
 #include "network_challenges.h"
 #include "esp_log.h"
@@ -12,34 +11,31 @@
 
 static const char *TAG = "network_challenges";
 
-// Queue for handling packet analysis
-static QueueHandle_t packet_queue = NULL;
-
 // Current active challenge
 static network_challenge_type_t active_challenge = -1;
 static TaskHandle_t challenge_task_handle = NULL;
 
-// Simulated network data for training
-typedef struct {
-    uint8_t bssid[6];
-    char ssid[33];
-    uint8_t channel;
-    wifi_auth_mode_t auth_mode;
-    int16_t rssi;
-} network_info_t;
+// Queue for packet analysis
+static QueueHandle_t packet_queue = NULL;
 
 // Callback function for WiFi promiscuous mode
 static void wifi_promiscuous_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
     if (type != WIFI_PKT_MGMT) return;
 
-    wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buf;
+    wifi_promiscuous_pkt_t *ppkt = (wifi_promiscuous_pkt_t *)buf;
+    wifi_packet_t *pkt = (wifi_packet_t *)ppkt->payload;
+    
+    // Send packet to queue for analysis
     if (xQueueSend(packet_queue, pkt, 0) != pdTRUE) {
         ESP_LOGW(TAG, "Packet queue full!");
     }
 }
 
-// Task to handle beacon frame analysis challenge
+// Task to handle beacon frame analysis
 static void beacon_analysis_task(void *pvParameters) {
+    ESP_LOGI(TAG, "Starting Beacon Analysis Challenge");
+    
+    // Configure promiscuous mode
     wifi_promiscuous_filter_t filter = {
         .filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT
     };
@@ -47,17 +43,18 @@ static void beacon_analysis_task(void *pvParameters) {
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(wifi_promiscuous_cb));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
 
-    wifi_promiscuous_pkt_t pkt;
+    wifi_packet_t pkt;
     while (active_challenge == NET_CHALLENGE_BEACON_ANALYSIS) {
         if (xQueueReceive(packet_queue, &pkt, pdMS_TO_TICKS(100)) == pdTRUE) {
-            // Analyze beacon frames
-            wifi_ieee80211_packet_t *ipkt = (wifi_ieee80211_packet_t *)pkt.payload;
-            wifi_ieee80211_mac_hdr_t *hdr = &ipkt->hdr;
-
-            if (hdr->frame_ctrl.subtype == WIFI_PKT_MGMT_BEACON) {
+            // Analyze only beacon frames
+            if (pkt.hdr.frame_ctrl.type == WIFI_FRAME_TYPE_MGMT && 
+                pkt.hdr.frame_ctrl.subtype == WIFI_MGMT_SUBTYPE_BEACON) {
+                
                 ESP_LOGI(TAG, "Beacon Frame Detected:");
-                ESP_LOGI(TAG, "BSSID: " MACSTR, MAC2STR(hdr->addr2));
-                // Add more beacon frame analysis here
+                ESP_LOGI(TAG, "BSSID: " MACSTR, MAC2STR(pkt.hdr.addr3));
+                ESP_LOGI(TAG, "SSID: %.*s", pkt.beacon.ssid_length, pkt.beacon.ssid);
+                ESP_LOGI(TAG, "Channel: %d", ppkt->rx_ctrl.channel);
+                ESP_LOGI(TAG, "RSSI: %d", ppkt->rx_ctrl.rssi);
             }
         }
     }

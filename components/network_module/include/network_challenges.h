@@ -5,36 +5,59 @@
 #include "esp_wifi.h"
 #include "esp_wifi_types.h"
 
-// Define IEEE 802.11 frame control field structure
-typedef struct {
-    unsigned protocol: 2;
-    unsigned type: 2;
-    unsigned subtype: 4;
-    unsigned to_ds: 1;
-    unsigned from_ds: 1;
-    unsigned more_frag: 1;
-    unsigned retry: 1;
-    unsigned pwr_mgmt: 1;
-    unsigned more_data: 1;
-    unsigned wep: 1;
-    unsigned order: 1;
-} wifi_ieee80211_frame_ctrl_t;
+// WiFi frame type and subtype definitions
+#define WIFI_MGMT_SUBTYPE_BEACON       0x08
+#define WIFI_MGMT_SUBTYPE_PROBE_REQ    0x04
+#define WIFI_MGMT_SUBTYPE_PROBE_RES    0x05
+#define WIFI_MGMT_SUBTYPE_DEAUTH       0x0C
 
-// Define IEEE 802.11 MAC header structure
+// Frame type definitions
+typedef enum {
+    WIFI_FRAME_TYPE_MGMT = 0,
+    WIFI_FRAME_TYPE_CTRL = 1,
+    WIFI_FRAME_TYPE_DATA = 2
+} wifi_frame_type_t;
+
+// Frame control field structure
 typedef struct {
-    wifi_ieee80211_frame_ctrl_t frame_ctrl;
-    uint16_t duration_id;
+    uint16_t protocol: 2;
+    uint16_t type: 2;
+    uint16_t subtype: 4;
+    uint16_t to_ds: 1;
+    uint16_t from_ds: 1;
+    uint16_t more_frag: 1;
+    uint16_t retry: 1;
+    uint16_t pwr_mgmt: 1;
+    uint16_t more_data: 1;
+    uint16_t protected_frame: 1;
+    uint16_t order: 1;
+} __attribute__((packed)) wifi_frame_ctrl_t;
+
+// MAC header structure
+typedef struct {
+    wifi_frame_ctrl_t frame_ctrl;
+    uint16_t duration;
     uint8_t addr1[6]; // Destination address
     uint8_t addr2[6]; // Source address
-    uint8_t addr3[6]; // BSSID
+    uint8_t addr3[6]; // BSSID for most frames
     uint16_t sequence_ctrl;
-} wifi_ieee80211_mac_hdr_t;
+} __attribute__((packed)) wifi_mac_hdr_t;
 
-// Define complete IEEE 802.11 packet structure
+// Complete packet structure for training
 typedef struct {
-    wifi_ieee80211_mac_hdr_t hdr;
-    uint8_t payload[0]; // Variable length payload
-} wifi_ieee80211_packet_t;
+    wifi_mac_hdr_t hdr;
+    union {
+        struct {
+            uint64_t timestamp;
+            uint16_t beacon_interval;
+            uint16_t capability;
+            uint8_t ssid_length;
+            uint8_t ssid[32];
+            // Other beacon fields follow but we don't need them for training
+        } __attribute__((packed)) beacon;
+        uint8_t payload[0];
+    };
+} __attribute__((packed)) wifi_packet_t;
 
 // Challenge types
 typedef enum {
@@ -45,7 +68,7 @@ typedef enum {
     NET_CHALLENGE_EVIL_TWIN
 } network_challenge_type_t;
 
-// Function declarations remain the same...
+// Function declarations
 esp_err_t network_challenges_init(void);
 esp_err_t start_network_challenge(network_challenge_type_t type);
 esp_err_t stop_network_challenge(void);
