@@ -1,7 +1,9 @@
 // components/network_module/network_challenges.c
 #include "network_challenges.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_wifi.h"
+#include "esp_wifi_types.h"
 #include "esp_event.h"
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
@@ -22,11 +24,10 @@ static QueueHandle_t packet_queue = NULL;
 static void wifi_promiscuous_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
     if (type != WIFI_PKT_MGMT) return;
 
-    wifi_promiscuous_pkt_t *ppkt = (wifi_promiscuous_pkt_t *)buf;
-    wifi_packet_t *pkt = (wifi_packet_t *)ppkt->payload;
+    const wifi_promiscuous_pkt_t *ppkt = (wifi_promiscuous_pkt_t *)buf;
+    const wifi_beacon_packet_t *pkt = (wifi_beacon_packet_t *)ppkt->payload;
     
-    // Send packet to queue for analysis
-    if (xQueueSend(packet_queue, pkt, 0) != pdTRUE) {
+    if (xQueueSend(packet_queue, &ppkt, pdMS_TO_TICKS(10)) != pdTRUE) {
         ESP_LOGW(TAG, "Packet queue full!");
     }
 }
@@ -43,16 +44,18 @@ static void beacon_analysis_task(void *pvParameters) {
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(wifi_promiscuous_cb));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
 
-    wifi_packet_t pkt;
+    const wifi_promiscuous_pkt_t *ppkt;
     while (active_challenge == NET_CHALLENGE_BEACON_ANALYSIS) {
-        if (xQueueReceive(packet_queue, &pkt, pdMS_TO_TICKS(100)) == pdTRUE) {
+        if (xQueueReceive(packet_queue, &ppkt, pdMS_TO_TICKS(100)) == pdTRUE) {
+            const wifi_beacon_packet_t *pkt = (wifi_beacon_packet_t *)ppkt->payload;
+            
             // Analyze only beacon frames
-            if (pkt.hdr.frame_ctrl.type == WIFI_FRAME_TYPE_MGMT && 
-                pkt.hdr.frame_ctrl.subtype == WIFI_MGMT_SUBTYPE_BEACON) {
+            if (pkt->hdr.frame_ctrl.type == WIFI_FRAME_TYPE_MGMT && 
+                pkt->hdr.frame_ctrl.subtype == WIFI_MGMT_SUBTYPE_BEACON) {
                 
                 ESP_LOGI(TAG, "Beacon Frame Detected:");
-                ESP_LOGI(TAG, "BSSID: " MACSTR, MAC2STR(pkt.hdr.addr3));
-                ESP_LOGI(TAG, "SSID: %.*s", pkt.beacon.ssid_length, pkt.beacon.ssid);
+                ESP_LOGI(TAG, "BSSID: " MACSTR, MAC2STR(pkt->hdr.addr3));
+                ESP_LOGI(TAG, "SSID: %.*s", pkt->beacon.ssid_length, pkt->beacon.ssid);
                 ESP_LOGI(TAG, "Channel: %d", ppkt->rx_ctrl.channel);
                 ESP_LOGI(TAG, "RSSI: %d", ppkt->rx_ctrl.rssi);
             }
@@ -114,7 +117,7 @@ static void evil_twin_task(void *pvParameters) {
 }
 
 esp_err_t network_challenges_init(void) {
-    packet_queue = xQueueCreate(32, sizeof(wifi_promiscuous_pkt_t));
+    packet_queue = xQueueCreate(32, sizeof(wifi_promiscuous_pkt_t *));
     if (packet_queue == NULL) {
         ESP_LOGE(TAG, "Failed to create packet queue");
         return ESP_FAIL;

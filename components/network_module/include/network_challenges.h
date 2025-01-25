@@ -33,6 +33,15 @@ typedef struct {
     uint16_t order: 1;
 } __attribute__((packed)) wifi_frame_ctrl_t;
 
+// Network info structure
+typedef struct {
+    uint8_t bssid[6];     // MAC address
+    char ssid[33];        // 32 chars + null terminator
+    uint8_t channel;      // WiFi channel
+    wifi_auth_mode_t auth_mode; // Authentication mode
+    int8_t rssi;         // Signal strength
+} network_info_t;
+
 // MAC header structure
 typedef struct {
     wifi_frame_ctrl_t frame_ctrl;
@@ -43,7 +52,7 @@ typedef struct {
     uint16_t sequence_ctrl;
 } __attribute__((packed)) wifi_mac_hdr_t;
 
-// Complete packet structure for training
+// Beacon packet structure
 typedef struct {
     wifi_mac_hdr_t hdr;
     union {
@@ -53,11 +62,10 @@ typedef struct {
             uint16_t capability;
             uint8_t ssid_length;
             uint8_t ssid[32];
-            // Other beacon fields follow but we don't need them for training
         } __attribute__((packed)) beacon;
         uint8_t payload[0];
     };
-} __attribute__((packed)) wifi_packet_t;
+} __attribute__((packed)) wifi_beacon_packet_t;
 
 // Challenge types
 typedef enum {

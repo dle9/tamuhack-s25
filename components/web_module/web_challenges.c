@@ -19,7 +19,7 @@ typedef struct {
     const char *description;
     challenge_difficulty_t difficulty;
     httpd_uri_t endpoint;
-    challenge_status_t status;
+    web_challenge_status_t status;  // Changed from challenge_status_t to web_challenge_status_t
 } challenge_def_t;
 
 // Simulated user database for authentication challenges
@@ -185,23 +185,34 @@ esp_err_t web_challenges_init(void) {
     return ESP_OK;
 }
 
-esp_err_t start_challenge(uint8_t challenge_id) {
-    if (challenge_id >= sizeof(challenges)/sizeof(challenges[0])) {
+
+// Update the get_challenge_status function
+web_challenge_status_t web_get_challenge_status(web_challenge_type_t challenge_type) {
+    if (challenge_type >= sizeof(challenges)/sizeof(challenges[0])) {
+        web_challenge_status_t empty_status = {0};  // Updated to use new type name
+        return empty_status;
+    }
+    return challenges[challenge_type].status;  // This should now work as types match
+}
+
+// Update the start_challenge function with correct parameter type
+esp_err_t start_web_challenge(web_challenge_type_t challenge_type) {
+    if (challenge_type >= sizeof(challenges)/sizeof(challenges[0])) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    challenges[challenge_id].status.start_time = 0; // esp_timer_get_time() / 1000000;
-    challenges[challenge_id].status.attempts = 0;
-    challenges[challenge_id].status.completed = false;
+    challenges[challenge_type].status.start_time = 0;
+    challenges[challenge_type].status.attempts = 0;
+    challenges[challenge_type].status.completed = false;
 
-    ESP_LOGI(TAG, "Started challenge: %s", challenges[challenge_id].name);
+    ESP_LOGI(TAG, "Started challenge: %s", challenges[challenge_type].name);
     return ESP_OK;
 }
 
-challenge_status_t get_challenge_status(uint8_t challenge_id) {
-    if (challenge_id >= sizeof(challenges)/sizeof(challenges[0])) {
-        challenge_status_t empty_status = {0};
-        return empty_status;
-    }
-    return challenges[challenge_id].status;
-}
+// web_challenge_status_t web_get_challenge_status(web_challenge_type_t challenge_type) {
+//     if (challenge_type >= sizeof(challenges)/sizeof(challenges[0])) {
+//         web_challenge_status_t empty_status = {0};
+//         return empty_status;
+//     }
+//     return challenges[challenge_type].status;
+// }

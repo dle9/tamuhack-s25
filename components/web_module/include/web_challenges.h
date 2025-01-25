@@ -1,15 +1,8 @@
 // components/web_module/include/web_challenges.h
 #pragma once
 
-#include "esp_http_server.h"
 #include "esp_err.h"
-
-// Challenge status structure
-typedef struct {
-    bool completed;
-    uint32_t attempts;
-    uint32_t start_time;
-} challenge_status_t;
+#include "esp_http_server.h"
 
 // Challenge difficulty levels
 typedef enum {
@@ -18,11 +11,21 @@ typedef enum {
     DIFFICULTY_HARD
 } challenge_difficulty_t;
 
-// Initialize the web challenges module
+// Challenge status tracking
+typedef struct {
+    uint32_t start_time;
+    uint16_t attempts;
+    bool completed;
+} web_challenge_status_t;  
+
+// Web challenge types
+typedef enum {
+    WEB_CHALLENGE_AUTH = 0,
+    WEB_CHALLENGE_SQLI,
+    WEB_CHALLENGE_XSS
+} web_challenge_type_t;
+
+// Function declarations with renamed functions to avoid conflicts
 esp_err_t web_challenges_init(void);
-
-// Start a specific challenge
-esp_err_t start_challenge(uint8_t challenge_id);
-
-// Get challenge status
-challenge_status_t get_challenge_status(uint8_t challenge_id);
+esp_err_t start_web_challenge(web_challenge_type_t challenge_type);
+web_challenge_status_t web_get_challenge_status(web_challenge_type_t challenge_type);
