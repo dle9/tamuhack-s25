@@ -1,11 +1,8 @@
-// Load Wi-Fi library
 #include <WiFi.h>
 
-// Replace with your network credentials
 const char* ssid     = "tamuballs";
 const char* password = "balls";
 
-// Set web server port number to 80
 WiFiServer server(80);
 
 // Variable to store the HTTP request
@@ -21,28 +18,24 @@ const int output27 = 27;
 
 void setup() {
   Serial.begin(9600);
+
   // Initialize the output variables as outputs
   pinMode(output26, OUTPUT);
   pinMode(output27, OUTPUT);
-  // Set outputs to LOW
   digitalWrite(output26, LOW);
   digitalWrite(output27, LOW);
 
-  // Connect to Wi-Fi network with SSID and password
   Serial.print("Setting AP (Access Point)…");
-  // Remove the password parameter, if you want the AP (Access Point) to be open
   WiFi.softAP(ssid, password);
 
   IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
-  // Serial.println(IP);
   
   server.begin();
 }
 
 void loop(){
   WiFiClient client = server.available();   // Listen for incoming clients
-  delay(1000);
   if (client) {                             // If a new client connects,
     Serial.println("New Client.");          // print a message out in the serial port
     String currentLine = "";                // make a String to hold incoming data from the client
