@@ -287,6 +287,78 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+
+static const httpd_uri_t hello = {
+    .uri       = "/",
+    .method    = HTTP_GET,
+    .handler   = hello_get_handler,
+    /* Let's pass response string in user
+     * context to demonstrate it's usage */
+    .user_ctx  = "Hello World!"
+};
+
+
+static httpd_handle_t start_webserver(void)
+{
+    httpd_handle_t server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    #if CONFIG_IDF_TARGET_LINUX
+    // Setting port as 8001 when building for Linux. Port 80 can be used only by a privileged user in linux.
+    // So when a unprivileged user tries to run the application, it throws bind error and the server is not started.
+    // Port 8001 can be used by an unprivileged user as well. So the application will not throw bind error and the
+    // server will be started.
+    config.server_port = 8001;
+    #endif // !CONFIG_IDF_TARGET_LINUX
+    config.lru_purge_enable = true;
+
+    // Start the httpd server
+    ESP_LOGI(TAG_AP, "Starting server on port: '%d'", config.server_port);
+    if (httpd_start(&server, &config) == ESP_OK) {
+        // Set URI handlers
+        ESP_LOGI(TAG_AP, "Registering URI handlers");
+        httpd_register_uri_handler(server, &hello);
+        return server;
+    }
+
+    ESP_LOGI(TAG_AP, "Error starting server!");
+    return NULL;
+}
+
+
+#if !CONFIG_IDF_TARGET_LINUX
+static esp_err_t stop_webserver(httpd_handle_t server)
+{
+    // Stop the httpd server
+    return httpd_stop(server);
+}
+
+
+static void disconnect_handler(void* arg, esp_event_base_t event_base,
+                               int32_t event_id, void* event_data)
+{
+    httpd_handle_t* server = (httpd_handle_t*) arg;
+    if (*server) {
+        ESP_LOGI(TAG_AP, "Stopping webserver");
+        if (stop_webserver(*server) == ESP_OK) {
+            *server = NULL;
+        } else {
+            ESP_LOGE(TAG_AP, "Failed to stop http server");
+        }
+    }
+}
+
+
+static void connect_handler(void* arg, esp_event_base_t event_base,
+                            int32_t event_id, void* event_data)
+{
+    httpd_handle_t* server = (httpd_handle_t*) arg;
+    if (*server == NULL) {
+        ESP_LOGI(TAG_AP, "Starting webserver");
+        *server = start_webserver();
+    }
+}
+#endif // !CONFIG_IDF_TARGET_LINUX
+
 /*******************************************************************************
  *
  *                                  MAIN
@@ -295,6 +367,8 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
 
 void app_main(void)
 {
+    static httpd_handle_t server = NULL;
+
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
@@ -336,7 +410,7 @@ void app_main(void)
     esp_netif_t *esp_netif_sta = wifi_init_sta();
 
     /* Start WiFi */
-    ESP_ERROR_CHECK(esp_wifi_start() );
+    ESP_ERROR_CHECK(esp_wifi_start());
 
     /*
      * Wait until either the connection is established (WIFI_CONNECTED_BIT) or
@@ -355,6 +429,12 @@ void app_main(void)
         ESP_LOGI(TAG_STA, "connected to ap SSID:%s password:%s",
                  EXAMPLE_ESP_WIFI_STA_SSID, EXAMPLE_ESP_WIFI_STA_PASSWD);
         softap_set_dns_addr(esp_netif_ap,esp_netif_sta);
+
+        server = start_webserver();
+        while (server) {
+            sleep(5);
+        }
+
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG_STA, "Failed to connect to SSID:%s, password:%s",
                  EXAMPLE_ESP_WIFI_STA_SSID, EXAMPLE_ESP_WIFI_STA_PASSWD);
