@@ -1,47 +1,47 @@
-// components/display/display.c
-#include "display.h"
-#include "driver/gpio.h"  // Add this header for gpio_config_t
+// In display.c
+#include "display.h"  // Include this header to define display_config_t
+#include <string.h>
+#include "esp_heap_caps.h"
+#include "driver/gpio.h"
+#include "driver/spi_master.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_vendor.h"
+#include "esp_log.h"  // Add this header for ESP_LOGI macro
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_ili9341.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_log.h"
 #include "lvgl.h"
-#include "esp_heap_caps.h"  // For heap_caps_malloc
+#include "esp_timer.h"
 
-
+// Global variables to track display state
+static lv_display_t *g_disp = NULL;
+static esp_lcd_panel_handle_t g_panel_handle = NULL;
 static const char *TAG = "display";
 
-// Global variables for display
-static lv_display_t *disp = NULL;
-static esp_lcd_panel_handle_t panel_handle = NULL;
+// LVGL Tick Timer Callback
+static void lvgl_tick_callback(void *arg) {
+    lv_tick_inc(1);
+}
 
-// LVGL draw buffers
-#define LVGL_DRAW_BUFFER_LINES 20
-static lv_color_t *draw_buf1 = NULL;
-static lv_color_t *draw_buf2 = NULL;
-
-        // LVGL flush callback
+// Flush Callback for LVGL
 static void example_lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
     esp_lcd_panel_handle_t panel_handle = lv_display_get_user_data(disp);
     
-    // Because SPI LCD is big-endian, we need to swap the RGB bytes order
+    // Swap RGB bytes for SPI LCD
     lv_draw_sw_rgb565_swap(px_map, (area->x2 + 1 - area->x1) * (area->y2 + 1 - area->y1));
     
-    // Copy buffer's content to a specific area of the display
-    esp_lcd_panel_draw_bitmap(panel_handle, 
+    // Draw bitmap
+    esp_lcd_panel_draw_bitmap(
+        panel_handle, 
         area->x1, area->y1, 
         area->x2 + 1, area->y2 + 1, 
-        px_map);
+        px_map
+    );
     
-    // Mark flush as complete
-    lv_display_flush_is_last(disp);
+    // Mark flush complete
+    lv_display_flush_ready(disp);
 }
 
-// Display initialization
 esp_err_t display_init(display_config_t *config) 
 {
     ESP_LOGI(TAG, "Initializing Display");
@@ -55,11 +55,7 @@ esp_err_t display_init(display_config_t *config)
         .quadhd_io_num = -1,
         .max_transfer_sz = config->width * 80 * sizeof(uint16_t),
     };
-    esp_err_t ret = spi_bus_initialize(config->spi_host, &buscfg, SPI_DMA_CH_AUTO);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize SPI bus: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    ESP_ERROR_CHECK(spi_bus_initialize(config->spi_host, &buscfg, SPI_DMA_CH_AUTO));
 
     // Panel IO Configuration
     esp_lcd_panel_io_handle_t io_handle = NULL;
@@ -72,11 +68,7 @@ esp_err_t display_init(display_config_t *config)
         .spi_mode = 0,
         .trans_queue_depth = 10,
     };
-    ret = esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)config->spi_host, &io_config, &io_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to create panel IO: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)config->spi_host, &io_config, &io_handle));
 
     // Panel Configuration
     esp_lcd_panel_dev_config_t panel_config = {
@@ -84,36 +76,13 @@ esp_err_t display_init(display_config_t *config)
         .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR,
         .bits_per_pixel = 16,
     };
-    ret = esp_lcd_new_panel_ili9341(io_handle, &panel_config, &panel_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to create panel: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    ESP_ERROR_CHECK(esp_lcd_new_panel_ili9341(io_handle, &panel_config, &g_panel_handle));
 
     // Panel Initialization
-    ret = esp_lcd_panel_reset(panel_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to reset panel: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = esp_lcd_panel_init(panel_handle);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize panel: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = esp_lcd_panel_mirror(panel_handle, true, false);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to mirror panel: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    ret = esp_lcd_panel_disp_on_off(panel_handle, true);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to turn on display: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    ESP_ERROR_CHECK(esp_lcd_panel_reset(g_panel_handle));
+    ESP_ERROR_CHECK(esp_lcd_panel_init(g_panel_handle));
+    ESP_ERROR_CHECK(esp_lcd_panel_mirror(g_panel_handle, true, false));
+    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(g_panel_handle, true));
 
     // Backlight Configuration
     gpio_config_t bk_gpio_config = {
@@ -123,42 +92,60 @@ esp_err_t display_init(display_config_t *config)
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE
     };
-    ret = gpio_config(&bk_gpio_config);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to configure backlight GPIO: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    ESP_ERROR_CHECK(gpio_config(&bk_gpio_config));
     gpio_set_level(config->backlight_pin, 1);
 
     // Initialize LVGL
     lv_init();
 
-    // Create LVGL Display
-    disp = lv_display_create(config->width, config->height);
-    if (!disp) {
+    // Create LVGL display
+    g_disp = lv_display_create(config->width, config->height);
+    if (!g_disp) {
         ESP_LOGE(TAG, "Failed to create LVGL display");
         return ESP_FAIL;
     }
 
-    // Allocate Draw Buffers
-    size_t draw_buffer_sz = config->width * LVGL_DRAW_BUFFER_LINES * sizeof(lv_color_t);
+    // Allocate draw buffers
+    size_t draw_buf_lines = 20;
+    size_t draw_buf_size = config->width * draw_buf_lines * sizeof(lv_color_t);
     
-    // Use heap allocation for draw buffers with DMA capability
-    draw_buf1 = heap_caps_malloc(draw_buffer_sz, MALLOC_CAP_DMA);
-    draw_buf2 = heap_caps_malloc(draw_buffer_sz, MALLOC_CAP_DMA);
+    lv_color_t *draw_buf1 = heap_caps_malloc(draw_buf_size, MALLOC_CAP_DMA);
+    lv_color_t *draw_buf2 = heap_caps_malloc(draw_buf_size, MALLOC_CAP_DMA);
 
     if (!draw_buf1 || !draw_buf2) {
         ESP_LOGE(TAG, "Failed to allocate draw buffers");
+        if (draw_buf1) free(draw_buf1);
+        if (draw_buf2) free(draw_buf2);
         return ESP_ERR_NO_MEM;
     }
 
-    // Set LVGL Display Buffers
-    lv_display_set_buffers(disp, draw_buf1, draw_buf2, draw_buffer_sz, LV_DISPLAY_RENDER_MODE_PARTIAL);
-    lv_display_set_user_data(disp, panel_handle);
-    lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
-    lv_display_set_flush_cb(disp, example_lvgl_flush_cb);
+    memset(draw_buf1, 0, draw_buf_size);
+    memset(draw_buf2, 0, draw_buf_size);
 
-    // Ensure initial screen is cleared
+    // Set display buffers
+    lv_display_set_buffers(
+        g_disp, 
+        draw_buf1, 
+        draw_buf2, 
+        draw_buf_size, 
+        LV_DISPLAY_RENDER_MODE_PARTIAL
+    );
+
+    // Set display properties
+    lv_display_set_flush_cb(g_disp, example_lvgl_flush_cb);
+    lv_display_set_color_format(g_disp, LV_COLOR_FORMAT_RGB565);
+    lv_display_set_user_data(g_disp, g_panel_handle);
+
+    // Create timer for LVGL tick
+    const esp_timer_create_args_t lvgl_tick_timer_args = {
+        .callback = lvgl_tick_callback,
+        .name = "lvgl_tick"
+    };
+    esp_timer_handle_t lvgl_tick_timer = NULL;
+    ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, 1000)); // 1ms
+
+    // Create a default screen with black background
     lv_obj_t *scr = lv_screen_active();
     lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
@@ -166,66 +153,50 @@ esp_err_t display_init(display_config_t *config)
     return ESP_OK;
 }
 
-
-// Menu display using LVGL
+// Modify display_show_menu
 void display_show_menu(const menu_item_t *items, size_t num_items, size_t selected) 
 {
-    // Clear existing screen
-    lv_obj_t *scr = lv_screen_active();
-    lv_obj_clean(scr);
+    // Ensure we have a valid display
+    if (!g_disp) return;
 
-    // Set background color to ensure visibility
+    // Clear existing screen
+    lv_obj_clean(lv_screen_active());
+
+    // Create a new screen
+    lv_obj_t *scr = lv_screen_active();
+    
+    // Ensure black background
     lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-    // Create a title
+    // Create title
     lv_obj_t *title = lv_label_create(scr);
     lv_label_set_text(title, "ESP32 Security Trainer");
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(title, lv_pct(100));
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
-    // Create a list for menu items
-    lv_obj_t *list = lv_list_create(scr);
-    lv_obj_set_size(list, lv_pct(90), lv_pct(80));
-    lv_obj_center(list);
-
-    // Add menu items to the list
+    // Create menu items
     for (size_t i = 0; i < num_items; i++) {
-        lv_obj_t *btn = lv_list_add_btn(list, NULL, items[i].name);
-        
-        // Set text color
-        lv_obj_set_style_text_color(btn, 
-            i == selected ? lv_color_hex(0x00FF00) : lv_color_white(), 
-            0
-        );
-        
-        // Highlight the currently selected item
+        lv_obj_t *btn = lv_button_create(scr);
+        lv_obj_set_width(btn, lv_pct(80));
+        lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, 50 + (i * 50));
+
+        lv_obj_t *label = lv_label_create(btn);
+        lv_label_set_text(label, items[i].name);
+        lv_obj_center(label);
+
+        // Highlight selected item
         if (i == selected) {
-            lv_obj_add_state(btn, LV_STATE_CHECKED);
+            lv_obj_set_style_bg_color(btn, lv_color_hex(0x00FF00), 0);  // Green
+            lv_obj_set_style_text_color(label, lv_color_black(), 0);
+        } else {
+            lv_obj_set_style_bg_color(btn, lv_color_hex(0x808080), 0);  // Gray
+            lv_obj_set_style_text_color(label, lv_color_white(), 0);
         }
     }
 
     // Force screen update
-    lv_refr_now(disp);
-}
-
-// Optional: Add a show alert function using LVGL
-void display_show_alert(const char *message) 
-{
-    // Clear existing screen
-    lv_obj_t *scr = lv_screen_active();
-    lv_obj_clean(scr);
-
-    // Create an alert label
-    lv_obj_t *alert_label = lv_label_create(scr);
-    lv_label_set_text(alert_label, message);
-    lv_obj_set_style_text_color(alert_label, lv_color_hex(0xFF0000), 0);  // Red color
-    lv_obj_align(alert_label, LV_ALIGN_CENTER, 0, 0);
-}
-
-// Clear screen function
-void display_clear(void) 
-{
-    lv_obj_t *scr = lv_screen_active();
-    lv_obj_clean(scr);
+    lv_refr_now(NULL);
 }

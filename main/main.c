@@ -31,6 +31,8 @@ static QueueHandle_t button_evt_queue = NULL;
 // Menu items and callbacks
 void network_training_cb(void);
 void web_training_cb(void);
+void start_lvgl_tick_task(void);
+
 
 static menu_item_t menu_items[] = {
     {"Network Security", network_training_cb},

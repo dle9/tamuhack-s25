@@ -5,6 +5,11 @@
 #define LV_HOR_RES_MAX     240
 #define LV_VER_RES_MAX     320
 
+
+
+
+#define LV_TICK_CUSTOM     1
+#define LV_TICK_CUSTOM_SYS_TIME_INTERVAL 1
 #define LV_USE_LOG 1
 #define LV_LOG_LEVEL LV_LOG_LEVEL_WARN
 
