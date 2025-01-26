@@ -23,7 +23,17 @@
 #endif
 #include "lwip/err.h"
 #include "lwip/sys.h"
+
+// http imports
+#include <stdlib.h>
+#include <unistd.h>
+#include <esp_log.h>
+#include <nvs_flash.h>
+#include <sys/param.h>
 #include <esp_http_server.h>
+#include "protocol_examples_common.h"
+#include "protocol_examples_utils.h"
+#include "esp_log.h"
 
 /*******************************************************************************
  *
@@ -75,6 +85,8 @@
 
 /*DHCP server option*/
 #define DHCPS_OFFER_DNS             0x02
+
+#define EXAMPLE_HTTP_QUERY_KEY_MAX_LEN  (64)
 
 static const char *TAG_AP = "WiFi SoftAP";
 static const char *TAG_STA = "WiFi Sta";
@@ -201,10 +213,10 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
     buf_len = httpd_req_get_hdr_value_len(req, "Host") + 1;
     if (buf_len > 1) {
         buf = malloc(buf_len);
-        ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
+        //#define EXAMPLE_HTTP_QUERY_KEY_MAX_LEN  (64)ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG_AP, "buffer alloc failed");
         /* Copy null terminated value string into buffer */
         if (httpd_req_get_hdr_value_str(req, "Host", buf, buf_len) == ESP_OK) {
-            ESP_LOGI(TAG, "Found header => Host: %s", buf);
+            ESP_LOGI(TAG_AP, "Found header => Host: %s", buf);
         }
         free(buf);
     }
@@ -212,9 +224,9 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
     buf_len = httpd_req_get_hdr_value_len(req, "Test-Header-2") + 1;
     if (buf_len > 1) {
         buf = malloc(buf_len);
-        ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
+        //ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG_AP, "buffer alloc failed");
         if (httpd_req_get_hdr_value_str(req, "Test-Header-2", buf, buf_len) == ESP_OK) {
-            ESP_LOGI(TAG, "Found header => Test-Header-2: %s", buf);
+            ESP_LOGI(TAG_AP, "Found header => Test-Header-2: %s", buf);
         }
         free(buf);
     }
@@ -222,9 +234,9 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
     buf_len = httpd_req_get_hdr_value_len(req, "Test-Header-1") + 1;
     if (buf_len > 1) {
         buf = malloc(buf_len);
-        ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
+        //ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG_AP, "buffer alloc failed");
         if (httpd_req_get_hdr_value_str(req, "Test-Header-1", buf, buf_len) == ESP_OK) {
-            ESP_LOGI(TAG, "Found header => Test-Header-1: %s", buf);
+            ESP_LOGI(TAG_AP, "Found header => Test-Header-1: %s", buf);
         }
         free(buf);
     }
@@ -234,25 +246,25 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
     buf_len = httpd_req_get_url_query_len(req) + 1;
     if (buf_len > 1) {
         buf = malloc(buf_len);
-        ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "buffer alloc failed");
+        //ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG_AP, "buffer alloc failed");
         if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
-            ESP_LOGI(TAG, "Found URL query => %s", buf);
+            ESP_LOGI(TAG_AP, "Found URL query => %s", buf);
             char param[EXAMPLE_HTTP_QUERY_KEY_MAX_LEN], dec_param[EXAMPLE_HTTP_QUERY_KEY_MAX_LEN] = {0};
             /* Get value of expected key from query string */
             if (httpd_query_key_value(buf, "query1", param, sizeof(param)) == ESP_OK) {
-                ESP_LOGI(TAG, "Found URL query parameter => query1=%s", param);
+                ESP_LOGI(TAG_AP, "Found URL query parameter => query1=%s", param);
                 example_uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
-                ESP_LOGI(TAG, "Decoded query parameter => %s", dec_param);
+                ESP_LOGI(TAG_AP, "Decoded query parameter => %s", dec_param);
             }
             if (httpd_query_key_value(buf, "query3", param, sizeof(param)) == ESP_OK) {
-                ESP_LOGI(TAG, "Found URL query parameter => query3=%s", param);
+                ESP_LOGI(TAG_AP, "Found URL query parameter => query3=%s", param);
                 example_uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
-                ESP_LOGI(TAG, "Decoded query parameter => %s", dec_param);
+                ESP_LOGI(TAG_AP, "Decoded query parameter => %s", dec_param);
             }
             if (httpd_query_key_value(buf, "query2", param, sizeof(param)) == ESP_OK) {
-                ESP_LOGI(TAG, "Found URL query parameter => query2=%s", param);
+                ESP_LOGI(TAG_AP, "Found URL query parameter => query2=%s", param);
                 example_uri_decode(dec_param, param, strnlen(param, EXAMPLE_HTTP_QUERY_KEY_MAX_LEN));
-                ESP_LOGI(TAG, "Decoded query parameter => %s", dec_param);
+                ESP_LOGI(TAG_AP, "Decoded query parameter => %s", dec_param);
             }
         }
         free(buf);
@@ -270,7 +282,7 @@ static esp_err_t hello_get_handler(httpd_req_t *req)
     /* After sending the HTTP response the old HTTP request
      * headers are lost. Check if HTTP request headers can be read now. */
     if (httpd_req_get_hdr_value_len(req, "Host") == 0) {
-        ESP_LOGI(TAG, "Request headers lost");
+        ESP_LOGI(TAG_AP, "Request headers lost");
     }
     return ESP_OK;
 }
