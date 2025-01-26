@@ -56,6 +56,7 @@ void web_training_cb(void) {
     ESP_LOGI(TAG, "Starting Web Security Training");
     start_web_challenge(WEB_CHALLENGE_AUTH);  // Now WEB_CHALLENGE_AUTH is defined in the enum
 }
+
 // Button handling task
 static void button_task(void* arg) {
     uint32_t gpio_num;
@@ -106,12 +107,17 @@ void app_main(void) {
 
     // Initialize display
     display_config_t display_config = {
-        .width = 128,
-        .height = 64,
-        .i2c_port = I2C_NUM_0,
-        .i2c_addr = DISPLAY_ADDRESS,
-        .sda_pin = DISPLAY_SDA,
-        .scl_pin = DISPLAY_SCL
+        .width = 240,             // Display width
+        .height = 320,            // Display height
+        .spi_host = HSPI_HOST,
+        .miso_pin = GPIO_NUM_12,  // TFT_MISO
+        .mosi_pin = GPIO_NUM_13,  // TFT_MOSI
+        .sclk_pin = GPIO_NUM_14,  // TFT_SCLK
+        .cs_pin = GPIO_NUM_15,    // TFT_CS
+        .dc_pin = GPIO_NUM_2,     // TFT_DC
+        .rst_pin = -1,           // TFT_RST (connected to EN)
+        .backlight_pin = GPIO_NUM_21,  // TFT_BL
+        .clock_speed = 40*1000*1000   // 40 MHz
     };
     ESP_ERROR_CHECK(display_init(&display_config));
 
