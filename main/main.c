@@ -10,7 +10,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "display.h"
-#include "network_challenges.h"  // Updated to use new network challenges
+#include "network_challenges.h" 
 #include "web_challenges.h"
 
 static const char *TAG = "main";
@@ -54,7 +54,7 @@ void network_training_cb(void) {
 
 void web_training_cb(void) {
     ESP_LOGI(TAG, "Starting Web Security Training");
-    start_web_challenge(WEB_CHALLENGE_AUTH);  // Now WEB_CHALLENGE_AUTH is defined in the enum
+    start_web_challenge(WEB_CHALLENGE_AUTH);  
 }
 
 // Button handling task
@@ -142,7 +142,7 @@ void app_main(void) {
     gpio_isr_handler_add(BUTTON_SELECT, button_isr_handler, (void*) BUTTON_SELECT);
 
     // Create button handling task
-    xTaskCreate(button_task, "button_task", 2048, NULL, 10, NULL);
+    xTaskCreate(button_task, "button_task", 4096, NULL, 10, NULL);
 
     // Initialize training modules
     ESP_ERROR_CHECK(network_challenges_init());  // Updated to use new network challenges
