@@ -132,6 +132,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
 esp_netif_t *wifi_init_softap(void)
 {
     esp_netif_t *esp_netif_ap = esp_netif_create_default_wifi_ap();
+    esp_netif_ip_info_t ip_info;
+    IP4_ADDR(&ip_info.ip, 192, 168, 4, 1);      // Static IP for access point
+    IP4_ADDR(&ip_info.gw, 192, 168, 4, 1);      // Gateway (same as IP)
+    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);  // Subnet mask
+
+    esp_netif_set_ip_info(esp_netif_ap, &ip_info);
 
     wifi_config_t wifi_ap_config = {
         .ap = {
@@ -141,7 +147,7 @@ esp_netif_t *wifi_init_softap(void)
             .password = EXAMPLE_ESP_WIFI_AP_PASSWD,
             .max_connection = EXAMPLE_MAX_STA_CONN,
             .authmode = WIFI_AUTH_WPA2_PSK,
-            .pmf_cfg = {
+                .pmf_cfg = {
                 .required = false,
             },
         },
@@ -300,7 +306,32 @@ static const httpd_uri_t hello = {
     .user_ctx  = "Hello World!"
 };
 
+static httpd_handle_t start_webserver(esp_netif_t *esp_netif_ap)
+{
+    httpd_handle_t server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
+    // Set the network interface for the server
+    config.interface = esp_netif_get_netif_impl(esp_netif_ap);
+
+    // Set port to 80 (or your desired port)
+    config.server_port = 8001;
+
+    config.lru_purge_enable = true;
+
+    // Start the httpd server
+    ESP_LOGI(TAG_AP, "Starting server on port: '%d'", config.server_port);
+    if (httpd_start(&server, &config) == ESP_OK) {
+        // Set URI handlers
+        ESP_LOGI(TAG_AP, "Registering URI handlers");
+        httpd_register_uri_handler(server, &hello);
+        return server;
+    }
+
+    ESP_LOGI(TAG_AP, "Error starting server!");
+    return NULL;
+}
+/*
 static httpd_handle_t start_webserver(void)
 {
     httpd_handle_t server = NULL;
@@ -326,6 +357,7 @@ static httpd_handle_t start_webserver(void)
     ESP_LOGI(TAG_AP, "Error starting server!");
     return NULL;
 }
+*/
 
 
 #if !CONFIG_IDF_TARGET_LINUX
@@ -357,7 +389,8 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
     httpd_handle_t* server = (httpd_handle_t*) arg;
     if (*server == NULL) {
         ESP_LOGI(TAG_AP, "Starting webserver");
-        *server = start_webserver();
+        //*server = start_webserver(esp_netif_ap);
+
     }
 }
 #endif // !CONFIG_IDF_TARGET_LINUX
@@ -440,9 +473,23 @@ void app_main(void)
         return;
     }
 
+
+    #if !CONFIG_IDF_TARGET_LINUX
+    #ifdef CONFIG_EXAMPLE_CONNECT_WIFI
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server));
+    #endif // CONFIG_EXAMPLE_CONNECT_WIFI
+#endif // !CONFIG_IDF_TARGET_LINUX
+
     /* Set sta as the default interface */
-    server = start_webserver();
     esp_netif_set_default_netif(esp_netif_ap);
+
+
+    /* Enable napt on the AP netif */
+    if (esp_netif_napt_enable(esp_netif_ap) != ESP_OK) {
+        ESP_LOGE(TAG_STA, "NAPT not enabled on the netif: %p", esp_netif_ap);
+    }
+    server = start_webserver(esp_netif_ap);
     const char* base_path = "/data";
     ESP_ERROR_CHECK(example_mount_storage(base_path));
     ESP_ERROR_CHECK(example_start_file_server(server, base_path));
@@ -451,10 +498,5 @@ void app_main(void)
         sleep(5);
     }
 
-
-    /* Enable napt on the AP netif */
-    if (esp_netif_napt_enable(esp_netif_ap) != ESP_OK) {
-        ESP_LOGE(TAG_STA, "NAPT not enabled on the netif: %p", esp_netif_ap);
-    }
 }
 
