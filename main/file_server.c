@@ -447,7 +447,8 @@ static esp_err_t delete_post_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* Function to start the file server */
+/*
+// Function to start the file server
 esp_err_t example_start_file_server(const char *base_path)
 {
     static struct file_server_data *server_data = NULL;
@@ -457,7 +458,7 @@ esp_err_t example_start_file_server(const char *base_path)
         return ESP_ERR_INVALID_STATE;
     }
 
-    /* Allocate memory for server data */
+    // Allocate memory for server data
     server_data = calloc(1, sizeof(struct file_server_data));
     if (!server_data) {
         ESP_LOGE(TAG, "Failed to allocate memory for server data");
@@ -469,9 +470,9 @@ esp_err_t example_start_file_server(const char *base_path)
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
-    /* Use the URI wildcard matching function in order to
-     * allow the same handler to respond to multiple different
-     * target URIs which match the wildcard scheme */
+    // Use the URI wildcard matching function in order to
+     // allow the same handler to respond to multiple different
+     // target URIs which match the wildcard scheme
     config.uri_match_fn = httpd_uri_match_wildcard;
 
     ESP_LOGI(TAG, "Starting HTTP Server on port: '%d'", config.server_port);
@@ -479,6 +480,60 @@ esp_err_t example_start_file_server(const char *base_path)
         ESP_LOGE(TAG, "Failed to start file server!");
         return ESP_FAIL;
     }
+
+    // URI handler for getting uploaded files
+    httpd_uri_t file_download = {
+        .uri       = "/",  // Match all URIs of type /path/to/file
+        .method    = HTTP_GET,
+        .handler   = download_get_handler,
+        .user_ctx  = server_data    // Pass server data as context
+    };
+    httpd_register_uri_handler(server, &file_download);
+
+    // URI handler for uploading files to server
+    httpd_uri_t file_upload = {
+        .uri       = "/upload/",   // Match all URIs of type /upload/path/to/file
+        .method    = HTTP_POST,
+        .handler   = upload_post_handler,
+        .user_ctx  = server_data    // Pass server data as context
+    };
+    httpd_register_uri_handler(server, &file_upload);
+
+    // URI handler for deleting files from server
+    httpd_uri_t file_delete = {
+        .uri       = "/delete/",   // Match all URIs of type /delete/path/to/file
+        .method    = HTTP_POST,
+        .handler   = delete_post_handler,
+        .user_ctx  = server_data    // Pass server data as context
+    };
+    httpd_register_uri_handler(server, &file_delete);
+
+    return ESP_OK;
+}
+*/
+
+esp_err_t example_start_file_server(httpd_handle_t existing_server, const char *base_path)
+{
+    static struct file_server_data *server_data = NULL;
+    if (server_data) {
+        ESP_LOGE(TAG, "File server already started");
+        return ESP_ERR_INVALID_STATE;
+    }
+    /* Allocate memory for server data */
+    server_data = calloc(1, sizeof(struct file_server_data));
+    if (!server_data) {
+        ESP_LOGE(TAG, "Failed to allocate memory for server data");
+        return ESP_ERR_NO_MEM;
+    }
+    strlcpy(server_data->base_path, base_path,
+            sizeof(server_data->base_path));
+
+    /* Use the URI wildcard matching function */
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.uri_match_fn = httpd_uri_match_wildcard;
+
+    httpd_handle_t server = existing_server;
+    ESP_LOGI(TAG, "file: go existing server");
 
     /* URI handler for getting uploaded files */
     httpd_uri_t file_download = {

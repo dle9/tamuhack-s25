@@ -34,6 +34,9 @@
 #include "protocol_examples_common.h"
 #include "protocol_examples_utils.h"
 #include "esp_log.h"
+#include "esp_event.h"
+#include "esp_err.h"
+#include "file_serving_example_common.h"
 
 /*******************************************************************************
  *
@@ -429,12 +432,6 @@ void app_main(void)
         ESP_LOGI(TAG_STA, "connected to ap SSID:%s password:%s",
                  EXAMPLE_ESP_WIFI_STA_SSID, EXAMPLE_ESP_WIFI_STA_PASSWD);
         softap_set_dns_addr(esp_netif_ap,esp_netif_sta);
-
-        server = start_webserver();
-        while (server) {
-            sleep(5);
-        }
-
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG_STA, "Failed to connect to SSID:%s, password:%s",
                  EXAMPLE_ESP_WIFI_STA_SSID, EXAMPLE_ESP_WIFI_STA_PASSWD);
@@ -444,10 +441,20 @@ void app_main(void)
     }
 
     /* Set sta as the default interface */
-    esp_netif_set_default_netif(esp_netif_sta);
+    server = start_webserver();
+    esp_netif_set_default_netif(esp_netif_ap);
+    const char* base_path = "/data";
+    ESP_ERROR_CHECK(example_mount_storage(base_path));
+    ESP_ERROR_CHECK(example_start_file_server(server, base_path));
+
+    while (server) {
+        sleep(5);
+    }
+
 
     /* Enable napt on the AP netif */
     if (esp_netif_napt_enable(esp_netif_ap) != ESP_OK) {
         ESP_LOGE(TAG_STA, "NAPT not enabled on the netif: %p", esp_netif_ap);
     }
 }
+
